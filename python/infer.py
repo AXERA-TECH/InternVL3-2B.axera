@@ -151,52 +151,57 @@ if __name__ == "__main__":
                         help="Path to HuggingFace model")
     parser.add_argument("--axmodel_path", type=str, default="./InternVL3-2B_axmodel",
                         help="Path to save compiled axmodel of llama model")
-    parser.add_argument("-i", "--image", type=str, default="./examples/image1.jpg",
+    parser.add_argument("--vit_model", type=str, default="./internvl3_2b_vit_slim.axmodel",
+                        help="Path to save compiled axmodel of llama model")
+    parser.add_argument("-i", "--images", nargs='+', type=str, default=["./examples/image1.jpg", "./examples/image2.jpg"],
                         help="Path to the test image.")
     args = parser.parse_args()
 
 
-    # If you want to load a model using multiple GPUs, please refer to the `Multiple GPUs` section.
     hf_model_path = args.hf_model
     axmodel_path = args.axmodel_path
-    test_img_path = args.image # './examples/image1.jpg' # image.png, image1.jpg
-    vit_axmodel_path = "internvl3_2b_vit_slim.axmodel"
+    vit_axmodel_path = args.vit_model
+    test_imgs_path = args.images # './examples/image1.jpg'
 
     config = AutoConfig.from_pretrained(hf_model_path, trust_remote_code=True)
     tokenizer = AutoTokenizer.from_pretrained(hf_model_path, trust_remote_code=True, use_fast=False)
-    # tokenizer = AutoTokenizer.from_pretrained("internlm2_5-7b-chat", trust_remote_code=True, use_fast=False)
     # set the max number of tiles in `max_num`
-    pixel_values = load_image(test_img_path, input_size=448, max_num=1)
+    pixel_values_list = []
+    for img_path in test_imgs_path:
+        pixel_values = load_image(img_path, input_size=448, max_num=1)
+        pixel_values_list.append(pixel_values)
     print("preprocess image done!")
 
-    # generation_config = dict(max_new_tokens=1024, do_sample=True)
     # extract img feature by vit
     vit_session = InferenceSession(vit_axmodel_path)
-    vit_output = vit_session.run(None, {"image": pixel_values.numpy()})[0]
-    print(f"vit_output.shape is {vit_output.shape}, vit feature extract done!")
+    vit_output_list = []
+    for idx, pixel_values in enumerate(pixel_values_list):
+        vit_output = vit_session.run(None, {"image": pixel_values.numpy()})[0]
+        vit_output_list.append(vit_output.copy()) # 避免 vit 输出结果使用同一块内存
+    assert not (vit_output_list[0] == vit_output_list[1]).all()
+    # vit_output = vit_output_list[0]
+    # print(f"vit_output.shape is {vit_output.shape}, vit feature extract done!")
 
-    prompt = "<|im_start|>system\n你是由上海人工智能实验室联合商汤科技开发的书生多模态大模型, 英文名叫 InternVL2_5, 是一个有用无害的人工智能助手.<|im_end|><|im_start|>user\n<img>"
-    prompt += "<IMG_CONTEXT>" * 256
-    # prompt += "<image>" * 256
-    # question = "请告诉我 y = 2x^2 + 3 的导数是多少? 告诉我详细的步骤!"
-    question = "请详细描述这幅图像."
+    prompt = "<|im_start|>system\n你是由上海人工智能实验室联合商汤科技开发的书生多模态大模型, 英文名叫 InternVL3, 是一个有用无害的人工智能助手, 擅长思考和回答用户的问题.<|im_end|><|im_start|>user\n"
+    question = "请详细描述这两幅图像, 并找出他们的异同点."
     # question = "Please describe the image shortly."
-    prompt += "</img>\n<|im_end|>" + question + "<|im_start|>assistant\n"
-    question = "请将这些英文翻译成中文: `She has always been there for me, through the good times and the bad. She has taught me so much about love and what it means to be a good person. Growing up, my mother was always my rock. She was the one I would go to for advice.`"
-    prompt += "</img>\n<|im_end|>" + question + "<|im_start|>assistant\n"
-
-    # prompt = "<|im_start|>system\n你是由上海人工智能实验室联合商汤科技开发的书生多模态大模型, 英文名叫 InternVL2_5, 是一个有用无害的人工智能助手.<|im_end|><|im_start|>user\n<|im_end|>请告诉我 y = 2x^2 + 3 的导数是多少? 告诉我详细的步骤!.<|im_start|>assistant\n"
+    prompt += "<|im_end|>" + question + "<|im_start|>\n"
+    for idx in range(len(pixel_values_list)):
+        prompt += "<img>" + "<IMG_CONTEXT>" * 256 + "</img>\n"
+    prompt += "assistant"
     token_ids = tokenizer.encode(prompt)
 
     # 图像理解
-    image_start_index = np.where(np.array(token_ids) == 151665)[0].tolist()[0] # <img> tag
-    image_insert_index = image_start_index + 1
+    image_start_indices = np.where(np.array(token_ids) == 151665)[0].tolist() # <img> tag
     embeds = np.load(f"{axmodel_path}/model.embed_tokens.weight.npy")
     prefill_data = np.take(embeds, token_ids, axis=0)
     prefill_data = prefill_data.astype(bfloat16)
-    prefill_data[image_insert_index : image_insert_index + 256] = vit_output[0, :, :]
     token_len = len(token_ids)
-    assert token_len > 128 * 3 # TODO: 如果缺少这个条件, 会报错!
+    assert token_len > 128 * 3, f"token len is {token_len}" # TODO: 如果缺少这个条件, 会报错!
+
+    for idx, image_start_index in enumerate(image_start_indices):
+        image_insert_index = image_start_index + 1
+        prefill_data[image_insert_index : image_insert_index + 256] = vit_output_list[idx][0, :, :]
     ##################################
 
     lastN = 2559
@@ -231,7 +236,7 @@ if __name__ == "__main__":
         prefill
     """
 
-    slice_indexs = [0, 1, 2, 3]
+    slice_indexs = [0, 1, 2, 3, 4]
     prefill_len = 128 * slice_indexs[-1]
     # prefill_len = 2048
     if prefill_len > 0:
