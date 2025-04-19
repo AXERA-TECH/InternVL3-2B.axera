@@ -24,16 +24,14 @@ pulsar2 llm_build \
     --last_kv_cache_len 384 \
     --last_kv_cache_len 512 \
     --last_kv_cache_len 640 \
-    --last_kv_cache_len 768  \
+    --last_kv_cache_len 768 \
     --last_kv_cache_len 896 \
     --last_kv_cache_len 1024 \
-    --last_kv_cache_len 1536 \
-    --last_kv_cache_len 2048 \
     --kv_cache_len 2559 \
     --chip AX650 -c 1 --parallel 28
 
+最多支持 4 幅图输入; 支持文本对话;
 """
-
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
@@ -153,8 +151,10 @@ if __name__ == "__main__":
                         help="Path to save compiled axmodel of llama model")
     parser.add_argument("--vit_model", type=str, default="./internvl3_2b_vit_slim.axmodel",
                         help="Path to save compiled axmodel of llama model")
-    parser.add_argument("-i", "--images", nargs='+', type=str, default=["./examples/image1.jpg", "./examples/image2.jpg"],
+    parser.add_argument("-i", "--images", nargs='+', type=str, default=None,
                         help="Path to the test image.")
+    parser.add_argument("-q", "--question", type=str, default="Please describe the image shortly.",
+                        help="Your question that you want to ask the model.")
     args = parser.parse_args()
 
 
@@ -167,28 +167,32 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(hf_model_path, trust_remote_code=True, use_fast=False)
     # set the max number of tiles in `max_num`
     pixel_values_list = []
-    for img_path in test_imgs_path:
-        pixel_values = load_image(img_path, input_size=448, max_num=1)
-        pixel_values_list.append(pixel_values)
-    print("preprocess image done!")
+    if test_imgs_path is not None:
+        for img_path in test_imgs_path:
+            pixel_values = load_image(img_path, input_size=448, max_num=1)
+            pixel_values_list.append(pixel_values)
+        print(f"输入图像数: {len(pixel_values_list)}")
+        print("preprocess image done!")
 
-    # extract img feature by vit
-    vit_session = InferenceSession(vit_axmodel_path)
-    vit_output_list = []
-    for idx, pixel_values in enumerate(pixel_values_list):
-        vit_output = vit_session.run(None, {"image": pixel_values.numpy()})[0]
-        vit_output_list.append(vit_output.copy()) # 避免 vit 输出结果使用同一块内存
-    assert not (vit_output_list[0] == vit_output_list[1]).all()
-    # vit_output = vit_output_list[0]
-    # print(f"vit_output.shape is {vit_output.shape}, vit feature extract done!")
+        # extract img feature by vit
+        vit_session = InferenceSession(vit_axmodel_path)
+        vit_output_list = []
+        for idx, pixel_values in enumerate(pixel_values_list):
+            vit_output = vit_session.run(None, {"image": pixel_values.numpy()})[0]
+            vit_output_list.append(vit_output.copy()) # 避免 vit 输出结果使用同一块内存
 
-    prompt = "<|im_start|>system\n你是由上海人工智能实验室联合商汤科技开发的书生多模态大模型, 英文名叫 InternVL3, 是一个有用无害的人工智能助手, 擅长思考和回答用户的问题.<|im_end|><|im_start|>user\n"
-    question = "请详细描述这两幅图像, 并找出他们的异同点."
-    # question = "Please describe the image shortly."
-    prompt += "<|im_end|>" + question + "<|im_start|>\n"
-    for idx in range(len(pixel_values_list)):
-        prompt += "<img>" + "<IMG_CONTEXT>" * 256 + "</img>\n"
-    prompt += "assistant"
+        print(f"vit_output.shape is {vit_output_list[0].shape}, vit feature extract done!")
+
+    prompt = "<|im_start|>system\n你是由上海人工智能实验室联合商汤科技开发的书生多模态大模型, 英文名叫 InternVL3, 是一个有用无害的人工智能助手, 擅长思考和回答用户的问题. 请你在回答问题时使用简体中文.<|im_end|>\n"
+    question = args.question
+    prompt += "<|im_start|>user\n" + question
+
+    if len(pixel_values_list) > 0:
+        for idx in range(len(pixel_values_list)):
+            prompt += "\n<img>" + "<IMG_CONTEXT>" * 256 + "</img>\n"
+
+    prompt += "<|im_end|>\n<|im_start|>assistant"
+    print(f"prompt is {prompt}")
     token_ids = tokenizer.encode(prompt)
 
     # 图像理解
@@ -197,8 +201,8 @@ if __name__ == "__main__":
     prefill_data = np.take(embeds, token_ids, axis=0)
     prefill_data = prefill_data.astype(bfloat16)
     token_len = len(token_ids)
-    assert token_len > 128 * 3, f"token len is {token_len}" # TODO: 如果缺少这个条件, 会报错!
-
+    # assert token_len > 128 * 3, f"token len is {token_len}" # TODO: 如果缺少这个条件, 会报错!
+    assert token_len < 1024 + 128, f"输入 prompt({token_len}) 超过最大限度!"
     for idx, image_start_index in enumerate(image_start_indices):
         image_insert_index = image_start_index + 1
         prefill_data[image_insert_index : image_insert_index + 256] = vit_output_list[idx][0, :, :]
@@ -235,14 +239,16 @@ if __name__ == "__main__":
     """
         prefill
     """
+    prefill_slice_len = 128
+    # slice_indexs = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    slice_indexs = [
+        e for e in range(token_len // prefill_slice_len + 1)
+    ]
+    print(f"slice_indexs is {slice_indexs}")
+    prefill_len = prefill_slice_len * slice_indexs[-1] if slice_indexs[-1] != 0 else prefill_slice_len # 这里的 128 就是 prefill_slice_len
 
-    slice_indexs = [0, 1, 2, 3, 4]
-    prefill_len = 128 * slice_indexs[-1]
-    # prefill_len = 2048
     if prefill_len > 0:
-        prefill_slice_len = 128
         for slice_index in slice_indexs:
-
             indices = np.array(
                 list(
                     range(
@@ -252,6 +258,7 @@ if __name__ == "__main__":
                 ),
                 np.uint32,
             ).reshape((1, prefill_slice_len))
+
             mask = (
                 np.zeros((1, prefill_slice_len, prefill_slice_len * (slice_index + 1)))
                 - 65536
@@ -270,7 +277,7 @@ if __name__ == "__main__":
                         .reshape((1, 1, cfg.hidden_size))
                         .astype(bfloat16)
                     )
-                    
+
             if slice_index == slice_indexs[-1]:
                 remain_len = token_len - slice_index * prefill_slice_len
             else:
@@ -310,7 +317,6 @@ if __name__ == "__main__":
                 data = outputs[2]
 
             print("slice prefill done", slice_index)
-
         post_out = post_process_session.run(
             None,
             {
@@ -320,12 +326,9 @@ if __name__ == "__main__":
             }
         )[0]
         next_token, posssible_tokens, possible_soft = post_process(post_out)
-        print(tokenizer.decode([next_token]))
         posibles = [tokenizer.decode([t]) for t in posssible_tokens]
         posible_soft = [str((t, s)) for t, s in zip(posibles, possible_soft)]
-        print(f"posibile {','.join(posible_soft)}")
         token_ids.append(next_token)
-        print(tokenizer.decode(token_ids))
 
     # set to decoder
     kv_cache_len = 2559
@@ -333,10 +336,10 @@ if __name__ == "__main__":
     mask[:, :, :kv_cache_len] -= 65536
     if prefill_len > 0:
         mask[:, :, :token_len] = 0
-    for start_indice in range(kv_cache_len + 1):
+    for start_indice in tqdm(range(kv_cache_len), desc="Decode"):
         if prefill_len > 0 and start_indice < token_len:
             continue
-        # print(start_indice, "start_indice")
+
         next_token = token_ids[start_indice]
         indices = np.array([start_indice], np.uint32).reshape((1, 1))
         data = embeds[next_token, :].reshape((1, 1, cfg.hidden_size)).astype(bfloat16)
@@ -364,4 +367,4 @@ if __name__ == "__main__":
                 break
 
     # print result
-    print(tokenizer.decode(token_ids))
+    print(tokenizer.decode(token_ids[token_len:], skip_special_tokens=True))
