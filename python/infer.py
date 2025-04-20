@@ -30,7 +30,7 @@ pulsar2 llm_build \
     --kv_cache_len 2559 \
     --chip AX650 -c 1 --parallel 28
 
-最多支持 4 幅图输入; 支持文本对话;
+最多支持 4 幅图像输入; 支持文本对话;
 """
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
@@ -149,11 +149,11 @@ if __name__ == "__main__":
                         help="Path to HuggingFace model")
     parser.add_argument("--axmodel_path", type=str, default="./InternVL3-2B_axmodel",
                         help="Path to save compiled axmodel of llama model")
-    parser.add_argument("--vit_model", type=str, default="./internvl3_2b_vit_slim.axmodel",
+    parser.add_argument("--vit_model", type=str, default=None,
                         help="Path to save compiled axmodel of llama model")
     parser.add_argument("-i", "--images", nargs='+', type=str, default=None,
                         help="Path to the test image.")
-    parser.add_argument("-q", "--question", type=str, default="Please describe the image shortly.",
+    parser.add_argument("-q", "--question", type=str, default="Please calculate the derivative of the function y=2x^2.",
                         help="Your question that you want to ask the model.")
     args = parser.parse_args()
 
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     hf_model_path = args.hf_model
     axmodel_path = args.axmodel_path
     vit_axmodel_path = args.vit_model
-    test_imgs_path = args.images # './examples/image1.jpg'
+    test_imgs_path = args.images
 
     config = AutoConfig.from_pretrained(hf_model_path, trust_remote_code=True)
     tokenizer = AutoTokenizer.from_pretrained(hf_model_path, trust_remote_code=True, use_fast=False)
@@ -201,7 +201,7 @@ if __name__ == "__main__":
     prefill_data = np.take(embeds, token_ids, axis=0)
     prefill_data = prefill_data.astype(bfloat16)
     token_len = len(token_ids)
-    # assert token_len > 128 * 3, f"token len is {token_len}" # TODO: 如果缺少这个条件, 会报错!
+
     assert token_len < 1024 + 128, f"输入 prompt({token_len}) 超过最大限度!"
     for idx, image_start_index in enumerate(image_start_indices):
         image_insert_index = image_start_index + 1

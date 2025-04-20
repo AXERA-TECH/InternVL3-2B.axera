@@ -1,0 +1,45 @@
+{
+  "model_type": "ONNX",
+  "npu_mode": "NPU3",
+  "quant": {
+    "input_configs": [
+      {
+        "tensor_name": "DEFAULT",
+        "calibration_dataset": "./datasets/imagenet-calib.tar",
+        "calibration_size": -1,
+        "calibration_mean": [123.675, 116.28, 103.53],
+        "calibration_std": [58.395, 57.12, 57.375],
+        "calibration_format":"Image"
+      }
+    ],
+    "calibration_method": "MinMax",
+    "precision_analysis": true,
+    "precision_analysis_method": "EndToEnd",
+    "conv_bias_data_type": "FP32",
+    "enable_smooth_quant": true,
+      "disable_auto_refine_scale": true,
+    "layer_configs":  [
+      {
+        "start_tensor_names": ["DEFAULT"], 
+        "end_tensor_names": ["DEFAULT"], 
+        "data_type": "U16"
+      }
+
+    ]
+  },
+  "input_processors": [
+    {
+      "tensor_name": "DEFAULT",
+      "tensor_format": "RGB",
+      "tensor_layout": "NCHW",
+      "src_dtype": "FP32",
+      "src_layout": "NCHW",
+      "mean": [0, 0, 0],
+      "std": [1, 1, 1]
+    }
+  ],
+  "compiler": {
+    "npu_perf": false
+  }
+}
+  

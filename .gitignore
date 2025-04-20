@@ -1,0 +1,11 @@
+__pycache__
+*.tar
+build-output/
+*.onnx
+*.pth
+*.pkl
+*.axmodel
+tmp/
+InternVL3-2B/
+InternVL3-2B_axmodel_chunk_128/
+InternVL3-2B_axmodel/
