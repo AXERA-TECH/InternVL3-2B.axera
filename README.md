@@ -137,7 +137,7 @@ $ export PATH=$PATH:/opt/site-packages/local/bin
 
 ```sh
 $ cd InternVL3-2B.axera/python
-$ python3 infer_axmodel.py --hf_model InternVL3-2B/ --axmodel_path InternVL3-2B_axmodel_chunk_128/ --question "请计算函数[y=2x^2+2]的导数, 并提供 markdown 格式的推理过程"
+$ python3 infer.py --hf_model InternVL3-2B/ --axmodel_path InternVL3-2B_axmodel_chunk_128/ --question "请计算函数[y=2x^2+2]的导数, 并提供 markdown 格式的推理过程"
 ```
 
 输出结果如下:
@@ -199,7 +199,7 @@ Decode:  26%|█████████████████▉             
 
 ```sh
 $ cd InternVL3-2B.axera/python
-$ python3 infer_axmodel.py --hf_model InternVL3-2B/ --axmodel_path InternVL3-2B_axmodel_chunk_128/ -q "请分别描述这几幅图像的内容, 并找出它们的异同点" -i examples/image_0.jpg examples/image_1.jpg examples/image_2.png examples/image_3.png
+$ python3 infer.py --hf_model InternVL3-2B/ --axmodel_path InternVL3-2B_axmodel_chunk_128/ -q "请分别描述这几幅图像的内容, 并找出它们的异同点" -i examples/image_0.jpg examples/image_1.jpg examples/image_2.png examples/image_3.png
 ```
 
 此模型最多支持四幅图像作为输入:
@@ -212,7 +212,7 @@ $ python3 infer_axmodel.py --hf_model InternVL3-2B/ --axmodel_path InternVL3-2B_
 
 ![image_3.png](python/examples/image_3.png)
 
-也可以通过命令行参数手动指定图像路径. 模型推理结果如下:
+模型推理结果如下:
 
 ```bash
 [INFO] Chip type: ChipType.MC50

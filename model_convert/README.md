@@ -44,7 +44,7 @@ $ git clone https://huggingface.co/OpenGVLab/InternVL3-2B
 $ bash download_dataset.sh
 ```
 
-执行结束后可以在当前文件夹内看到名为 `imagenet-calib.tar` 的量化文件.
+执行结束后可以在 `./datasets` 文件夹内看到名为 `imagenet-calib.tar` 的压缩文件.
 
 ### 修改配置文件
  
