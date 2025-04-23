@@ -255,7 +255,11 @@ $ python3 infer_video.py --hf_model InternVL3-2B/ --axmodel_path InternVL3-2B_ax
 
 模型输入:
 
-<video src="python/examples/red-panda.mp4" controls width="640" height="360"></video>
+
+
+https://github.com/user-attachments/assets/2beffc73-d078-4c54-8282-7b7d845f39c9
+
+
 
 模型推理结果如下:
 
