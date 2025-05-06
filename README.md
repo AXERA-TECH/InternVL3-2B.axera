@@ -201,7 +201,7 @@ Decode:  26%|█████████████████▉             
 
 ```sh
 $ cd InternVL3-2B.axera/python
-$ python3 infer.py --hf_model InternVL3-2B/ --axmodel_path InternVL3-2B_axmodel_chunk_128/ -q "请分别描述这几幅图像的内容, 并找出它们的异同点" -i examples/image_0.jpg examples/image_1.jpg examples/image_2.png examples/image_3.png
+$ python3 infer.py --hf_model InternVL3-2B/ --axmodel_path InternVL3-2B_axmodel_chunk_128/ -q "请分别描述这几幅图像的内容, 并找出它们的异同点" -i examples/image_0.jpg examples/image_1.jpg examples/image_2.png examples/image_3.png --vit_model vit_axmodel/internvl3_2b_vit_slim.axmodel
 ```
 
 此模型最多支持 `4` 幅图像作为输入:
