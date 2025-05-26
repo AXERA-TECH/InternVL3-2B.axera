@@ -1,11 +1,6 @@
-onnx
-onnxruntime
 opencv-python
-torch
-torchvision
-tqdm
-numpy
-loguru
 transformers
-einops
-pillow
+numpy
+ml_dtypes
+tqdm
+decord
