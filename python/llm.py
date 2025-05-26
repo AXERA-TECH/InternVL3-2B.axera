@@ -170,6 +170,11 @@ class LLM:
         self.vit_session = InferenceSession(vit_axmodel_path)
         
         self.embeds = np.load(f"{axmodel_path}/model.embed_tokens.weight.npy")
+        
+        self.stop = False
+    
+    def stop_generate(self):
+        self.stop = True
 
     def image_encode(self, images_list):
         pixel_values_list = []
@@ -209,9 +214,12 @@ class LLM:
         print(len(token_ids))
         return token_ids
     
-    def generate(self, sources, prompt):
-        if len(sources) == 1 and sources[0].endswith(".mp4") or isinstance(sources, str) and sources.endswith(".mp4"):
-            images_list = load_video(sources[0], num_segments = 8)
+    def generate(self, sources, prompt, num_segments = 8):
+        self.stop = False
+        if isinstance(sources, str) and sources.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm")):
+            images_list = load_video(sources, num_segments = num_segments)
+        elif len(sources) == 1 and sources[0].endswith((".mp4", ".avi", ".mov", ".mkv", ".webm")) :
+            images_list = load_video(sources[0], num_segments = num_segments)
         else:
             images_list = sources
             for idx, img in enumerate(images_list):
@@ -328,6 +336,9 @@ class LLM:
                         :,
                     ] = outputs[1][:, :remain_len, :]
                     data = outputs[2]
+                    
+                    if self.stop:
+                        return
 
                 # print("slice prefill done", slice_index)
             post_out = self.post_process_session.run(
@@ -376,14 +387,27 @@ class LLM:
                 post_out = self.post_process_session.run(None, {"input": data})[0]
                 next_token, posssible_tokens, possible_soft = post_process(post_out)
                 token_ids.append(next_token)
+                
+                if next_token == self.tokenizer.eos_token_id and next_token > token_len:
+                    if len(token_ids_cached) > 0:
+                        msg = self.tokenizer.decode(token_ids_cached)
+                        token_ids_cached.clear()
+                        if "\ufffd" in msg:
+                            msg = msg.replace("\ufffd", "")
+                        # print(msg, end="", flush=True)
+                        yield msg
+                    break
+                
                 token_ids_cached.append(next_token)
                 
                 if len(token_ids_cached) >= 3:
                     msg = self.tokenizer.decode(token_ids_cached)
+                    token_ids_cached.clear()
                     if "\ufffd" in msg:
                         msg = msg.replace("\ufffd", "")
                     # print(msg, end="", flush=True)
                     yield msg
-                    token_ids_cached.clear()
-                if next_token == self.tokenizer.eos_token_id and next_token > token_len:
-                    break
+                    
+                
+            if self.stop:
+                return
