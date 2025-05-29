@@ -102,9 +102,22 @@ def load_video(video_path, bound=None, num_segments=32):
     frame_indices = get_index(bound, fps, max_frame, first_idx=0, num_segments=num_segments)
     for frame_index in frame_indices:
         img = vr[frame_index].asnumpy()
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         images_list.append(img)
     return images_list
-    
+
+def is_video_file(path):
+    return str(path).lower().endswith((".mp4", ".avi", ".mov", ".mkv", ".webm"))
+
+def is_image_file(path):
+    return str(path).lower().endswith((".jpg", ".png", ".jpeg", ".webp"))
+
+def load_image(path):
+    image = cv2.imread(str(path))
+    if image is None:
+        raise ValueError(f"Image {path} not found or cannot be read.")
+    return image
+
 def post_process(data, topk=1, topp=0.9, temperature=0.6):
     def top_p(l: np.ndarray, p: float) -> np.ndarray:
         index = np.argsort(l)
@@ -181,8 +194,6 @@ class LLM:
         vit_output_list = []
         if images_list is not None:
             for img in images_list:
-                if isinstance(img, str):
-                    img = cv2.imread(img)
                 pixel_values = pre_process(img, input_size=448, max_num=1)
                 pixel_values_list.append(pixel_values)
             print(f"输入图像数: {len(pixel_values_list)}")
@@ -199,7 +210,7 @@ class LLM:
         
         return vit_output_list
 
-    def prompt_encode(self, question, num_of_images):
+    def prompt_encode(self, question, num_of_images) -> list:
         prompt = "<|im_start|>system\n你是书生·万象, 英文名是InternVL, 是由上海人工智能实验室、清华大学及多家合作单位联合开发的多模态大语言模型.<|im_end|>\n"
         # question = args.question
         prompt += "<|im_start|>user\n" + question
@@ -214,20 +225,38 @@ class LLM:
         print(len(token_ids))
         return token_ids
     
-    def generate(self, sources, prompt, num_segments = 8):
+
+    def generate(self, sources, prompt, video_segments=8):
         self.stop = False
-        if isinstance(sources, str) and sources.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm")):
-            images_list = load_video(sources, num_segments = num_segments)
-        elif len(sources) == 1 and sources[0].endswith((".mp4", ".avi", ".mov", ".mkv", ".webm")) :
-            images_list = load_video(sources[0], num_segments = num_segments)
-        else:
-            images_list = sources
-            for idx, img in enumerate(images_list):
+        images_list = []
+
+        # 1. Handle single video path string
+        if isinstance(sources, str) and is_video_file(sources):
+            images_list = load_video(sources, num_segments=video_segments)
+
+        # 2. Handle [video_path] list
+        elif isinstance(sources, list) and len(sources) == 1 and isinstance(sources[0], str) and is_video_file(sources[0]):
+            images_list = load_video(sources[0], num_segments=video_segments)
+
+        # 3. Handle single image path
+        elif isinstance(sources, str) and is_image_file(sources):
+            images_list = [load_image(sources)]
+
+        # 4. Handle single image as np.ndarray
+        elif isinstance(sources, np.ndarray):
+            images_list = [sources]
+
+        # 5. Handle list of images or paths
+        elif isinstance(sources, list):
+            for img in sources:
                 if isinstance(img, str):
-                    image = cv2.imread(img)
-                    if image is None:
-                        raise ValueError(f"Image {img} not found!")
-                    images_list[idx] = image
+                    images_list.append(load_image(img))
+                elif isinstance(img, np.ndarray):
+                    images_list.append(img)
+                else:
+                    raise ValueError(f"Unsupported image type: {type(img)}")
+        else:
+            raise ValueError("Unsupported input format for 'sources'.")
                     
         vit_output_list = self.image_encode(images_list)
         
