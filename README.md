@@ -349,6 +349,14 @@ g0: 2.664 ms
 
 固定 320 prefill 推理, prefill 每一层耗时 28.258 ms, 一共 28 层, decode 耗时 2.510 ms, post 耗时 11.761 ms.
 
+
+### gradio demo
+```
+python gradio_demo.py --hf_model ./InternVL3-2B/ --axmodel_path ./InternVL3-2B_axmodel/ --vit_model ./vit_axmodel/internvl3_2b_vit_slim.axmodel 
+```
+![](python/gradio_demo.png)
+
+
 ## 技术讨论
 
 - Github issues
