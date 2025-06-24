@@ -156,7 +156,7 @@ class LLM:
   
     def __init__(self, hf_model_path, axmodel_path, vit_axmodel_path ):
         self.hf_model_path = hf_model_path
-        
+        self.tag = "image"
         
         config = AutoConfig.from_pretrained(hf_model_path, trust_remote_code=True)
         self.tokenizer = AutoTokenizer.from_pretrained(hf_model_path, trust_remote_code=True, use_fast=False)
@@ -213,18 +213,22 @@ class LLM:
     def prompt_encode(self, question, num_of_images) -> list:
         prompt = "<|im_start|>system\n你是书生·万象, 英文名是InternVL, 是由上海人工智能实验室、清华大学及多家合作单位联合开发的多模态大语言模型.<|im_end|>\n"
         # question = args.question
-        prompt += "<|im_start|>user\n" + question
 
         if num_of_images > 0:
             for idx in range(num_of_images):
-                prompt += "\n<img>" + "<IMG_CONTEXT>" * 256 + "</img>\n"
-        
-        prompt += "<|im_end|>\n<|im_start|>assistant"
-        # print(f"prompt is {prompt}")
+                if self.tag == "video":
+                    prompt += "<|im_start|>user"
+                    prompt += f"\nFrame{idx+1}: <img>" + "<IMG_CONTEXT>" * 256 + "</img>\n"
+                    prompt += f"\n{question}<|im_end|>\n<|im_start|>assistant\n"
+                else:
+                    prompt += "<|im_start|>user\n" + question
+                    prompt += "\n<img>" + "<IMG_CONTEXT>" * 256 + "</img>\n"
+                    prompt += "<|im_end|>\n<|im_start|>assistant\n"
+
         token_ids = self.tokenizer.encode(prompt)
-        print(len(token_ids))
+        print(f"prompt is {prompt}, \ntoken_len is {len(token_ids)}")
         return token_ids
-    
+
 
     def generate(self, sources, prompt, video_segments=8):
         self.stop = False
@@ -257,11 +261,11 @@ class LLM:
                     raise ValueError(f"Unsupported image type: {type(img)}")
         else:
             raise ValueError("Unsupported input format for 'sources'.")
-                    
+
         vit_output_list = self.image_encode(images_list)
-        
+
         token_ids = self.prompt_encode(prompt, len(vit_output_list))
-        
+
         k_caches = [
             np.zeros((1, self.kv_cache_len, self.kv_dim), dtype=bfloat16)
             for _ in range(self.cfg.num_hidden_layers)
@@ -273,7 +277,7 @@ class LLM:
 
         # 图像理解
         image_start_indices = np.where(np.array(token_ids) == 151665)[0].tolist() # <img> tag
-        
+
         prefill_data = np.take(self.embeds, token_ids, axis=0)
         prefill_data = prefill_data.astype(bfloat16)
         token_len = len(token_ids)
@@ -284,7 +288,6 @@ class LLM:
             prefill_data[image_insert_index : image_insert_index + 256] = vit_output_list[idx][0, :, :]
         ##################################
         print("prefill token_len: ", token_len)
-        
 
         """
             prefill
@@ -385,11 +388,13 @@ class LLM:
 
         # set to decoder
         token_ids_cached = []
-        
+        token_ids_cached.append(next_token)
+
         mask = np.zeros((1, 1, self.kv_cache_len + 1), dtype=np.float32).astype(bfloat16)
         mask[:, :, :self.kv_cache_len] -= 65536
         if prefill_len > 0:
             mask[:, :, :token_len] = 0
+
         for start_indice in range(self.kv_cache_len):
             if prefill_len > 0 and start_indice < token_len:
                 continue
@@ -426,9 +431,9 @@ class LLM:
                         # print(msg, end="", flush=True)
                         yield msg
                     break
-                
+
                 token_ids_cached.append(next_token)
-                
+
                 if len(token_ids_cached) >= 3:
                     msg = self.tokenizer.decode(token_ids_cached)
                     token_ids_cached.clear()

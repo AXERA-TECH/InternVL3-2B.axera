@@ -40,8 +40,9 @@ def respond(prompt, video, image, is_image, video_segments,  image_segments_cols
     if not prompt.strip():
         return history
     # append empty response to history
-   
     
+    gllm.tag = "video" if not is_image else "image"
+
     history.append((prompt, ""))
     yield history
     
