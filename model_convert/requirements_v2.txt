@@ -1,7 +1,11 @@
 onnx
+onnxsim
 onnxruntime
 opencv-python
 torch
 torchvision
 numpy
 loguru
+transformers
+einops
+timm
