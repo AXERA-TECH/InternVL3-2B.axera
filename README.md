@@ -2,8 +2,13 @@
 
 > Deepseek InternVL3-2B DEMO on Axera.
 
-- 目前支持 `Python` 语言, `C++` 代码在开发中.
-- 预编译模型可以从 [百度网盘](https://pan.baidu.com/s/11BM4Zkf5ThwUvA17TeQc8A?pwd=x3my) 下载.
+- 当前仓库仅包含基于 NPU Python API 的上板示例,
+- 基于 NPU C++ API 的上板示例请参考
+    - [基于 AX650 做主控运行的版本](https://github.com/AXERA-TECH/ax-llm/tree/ax-internvl)
+    - [基于 AX650 做算力卡(AXCL)的版本](https://github.com/AXERA-TECH/ax-llm/tree/axcl-internvl) 
+- 预编译模型可以从以下途径获取
+    - [百度网盘](https://pan.baidu.com/s/11BM4Zkf5ThwUvA17TeQc8A?pwd=x3my)
+    - [Huggingface(强烈建议参考这里, 因为最完整)](https://huggingface.co/AXERA-TECH/InternVL3-2B)
 - 如需自行导出编译 `VIT` 模型请参考 [模型转换](/model_convert/README.md).
 
 ## 支持平台
