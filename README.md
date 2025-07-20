@@ -1,8 +1,8 @@
 # InternVL3-2B.axera
 
-> Deepseek InternVL3-2B DEMO on Axera.
+> InternVL3-2B DEMO on Axera.
 
-- 当前仓库仅包含基于 NPU Python API 的上板示例,
+- 当前仓库仅包含基于 NPU Python API 的上板示例，由于 pyaxengine 暂时的设计缺陷，导致 OS 内存消耗较大（＞ 4GB），因此请合理分配内存
 - 基于 NPU C++ API 的上板示例请参考
     - [基于 AX650 做主控运行的版本](https://github.com/AXERA-TECH/ax-llm/tree/ax-internvl)
     - [基于 AX650 做算力卡(AXCL)的版本](https://github.com/AXERA-TECH/ax-llm/tree/axcl-internvl) 
