@@ -142,12 +142,12 @@ if __name__ == '__main__':
         torch_dtype=torch.bfloat16,
         load_in_8bit=False,
         low_cpu_mem_usage=True,
-        use_flash_attn=True,
+        use_flash_attn=False,
         trust_remote_code=True,
-    ).eval().cuda()
+    ).eval().cpu()
 
     IMG_SIZE = args.imgsize
-    images = torch.randn(1, 3, IMG_SIZE, IMG_SIZE).to(device="cuda", dtype=torch.float32)
+    images = torch.randn(1, 3, IMG_SIZE, IMG_SIZE).to(device="cpu", dtype=torch.float32)
 
     cfg = AutoConfig.from_pretrained(
         model_path, trust_remote_code=True
@@ -160,7 +160,7 @@ if __name__ == '__main__':
     )
 
     # vision_model.encoder.layers = vision_model.encoder.layers[:1] # debug 24
-    vision_model_warpper = VisionModelWarpper(model, cfg).to(device="cuda", dtype=torch.float32)
+    vision_model_warpper = VisionModelWarpper(model, cfg).to(device="cpu", dtype=torch.float32)
     torch.onnx.export(
         vision_model_warpper,
         images,
@@ -175,13 +175,15 @@ if __name__ == '__main__':
     logger.info("export internvl_vit_model onnx succee!")
     onnx_sim(internvl_vit_onnx_save_dir)
     # hack some nodes
-    hack_fuse(internvl_vit_onnx_save_dir, images.cpu().numpy())
-    logger.warning("Use onnxslim to fine-tune the ONNX model. Please ensure onnxslim is installed first.")
+    try:
+        hack_fuse(internvl_vit_onnx_save_dir, images.cpu().numpy())
+    except Exception as e:
+        logger.warning(f"hack fuse failed (skip): {e}")
+    logger.debug("Use onnxslim to fine-tune the ONNX model. Please ensure onnxslim is installed first.")
     import subprocess
     result = subprocess.run(
-        ["onnxsim", internvl_vit_onnx_save_dir, internvl_vit_onnx_save_dir],
+        ["onnxslim", internvl_vit_onnx_save_dir, internvl_vit_onnx_save_dir],
         capture_output=True,
         text=True
     )
-    logger.info(result.stdout)
-
+    logger.debug(result.stdout)
